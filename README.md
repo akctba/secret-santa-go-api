@@ -1,2 +1,2 @@
 # secret-santa-go-api
-A Secret Santa API as an exercise of Go
+A Secret Santa API as an exercise of Go, challenge proposed by @LukeberryPi
