@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"log"
+	"math/rand"
 	"net/http"
 	"time"
 
@@ -52,7 +53,7 @@ func main() {
 
 	// Create database tables
 	sqlStmt := `
-	CREATE TABLE IF NOT EXISTS User (
+	CREATE TABLE IF NOT EXISTS Users (
 		user_id INTEGER PRIMARY KEY AUTOINCREMENT,
 		user_name TEXT,
 		user_email TEXT
@@ -67,7 +68,7 @@ func main() {
 	}
 
 	sqlStmt = `
-	CREATE TABLE IF NOT EXISTS Group (
+	CREATE TABLE IF NOT EXISTS Groups (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		group_name TEXT,
 		date_created TEXT,
@@ -124,7 +125,7 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 
 	// Insert the new user into the database
 	sqlStmt := `
-	INSERT INTO User (user_name, user_email, gender, date_of_birth) VALUES (?, ?, ?, ?);
+	INSERT INTO Users (user_name, user_email, gender, date_of_birth) VALUES (?, ?, ?, ?);
 	`
 	_, err = db.Exec(sqlStmt, user.UserName, user.UserEmail)
 	if err != nil {
@@ -150,7 +151,7 @@ func createGroup(w http.ResponseWriter, r *http.Request) {
 
 	// Insert the new group into the database
 	sqlStmt := `
-	INSERT INTO Group (group_name, date_created, creator_user_id) VALUES (?, ?, ?);
+	INSERT INTO Groups (group_name, date_created, creator_user_id) VALUES (?, ?, ?);
 	`
 	_, err = db.Exec(sqlStmt, group.GroupID, time.Now(), 1)
 	if err != nil {
@@ -176,7 +177,7 @@ func getUser(w http.ResponseWriter, r *http.Request) {
 
 	// Query the user from the database
 	var user User
-	sqlStmt := `SELECT user_id, user_name, user_email, gender, date_of_birth FROM User WHERE user_id = ?`
+	sqlStmt := `SELECT user_id, user_name, user_email, gender, date_of_birth FROM Users WHERE user_id = ?`
 	row := db.QueryRow(sqlStmt, userID)
 	err = row.Scan(&user.UserID, &user.UserName, &user.UserEmail, &user.Gender, &user.DateOfBirth)
 	if err != nil {
@@ -206,7 +207,7 @@ func getGroup(w http.ResponseWriter, r *http.Request) {
 
 	// Query the group from the database
 	var group Group
-	sqlStmt := `SELECT group_id, group_name, date_created, date_draw, creator_user_id FROM Group WHERE group_id = ?`
+	sqlStmt := `SELECT group_id, group_name, date_created, date_draw, creator_user_id FROM Groups WHERE group_id = ?`
 	row := db.QueryRow(sqlStmt, groupID)
 	err = row.Scan(&group.GroupID, &group.Name, &group.DateCreated, &group.DateDraw, &group.CreatorUserID)
 	if err != nil {
@@ -253,8 +254,70 @@ func addParticipant(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(participant)
 }
 
+// runDraw will run the draw for the group and assign a secret friend to each participant
+// get the list of participants for the group, shuffle it and assign the secret friend to each participant
 func runDraw(w http.ResponseWriter, r *http.Request) {
+	// Extract the group ID from the URL
+	vars := mux.Vars(r)
+	groupID := vars["id"]
 
+	// Open a connection to the SQLite database
+	db, err := sql.Open(DbDriver, DbName)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+
+	// Query the participants from the database
+	var participants []Participant
+	sqlStmt := `SELECT * FROM Participants WHERE group_id = ?`
+	rows, err := db.Query(sqlStmt, groupID)
+	if err != nil {
+		log.Printf("%q: %s\n", err, sqlStmt)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var participant Participant
+		if err := rows.Scan(&participant); err != nil {
+			log.Printf("%q: %s\n", err, sqlStmt)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		participants = append(participants, participant)
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Printf("%q: %s\n", err, sqlStmt)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Shuffle the participants
+	rand.Seed(time.Now().UnixNano())
+	rand.Shuffle(len(participants), func(i, j int) {
+		participants[i], participants[j] = participants[j], participants[i]
+	})
+
+	// Assign secret friends
+	for i := range participants {
+		friendIndex := (i + 1) % len(participants)
+		participants[i].FriendUserID = participants[friendIndex].UserID
+
+		// Update the participant in the database
+		sqlStmt = `UPDATE Participants SET friend_user_id = ? WHERE group_id = ? AND user_id = ?`
+		_, err = db.Exec(sqlStmt, participants[i].FriendUserID, groupID, participants[i].UserID)
+		if err != nil {
+			log.Printf("%q: %s\n", err, sqlStmt)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(participants)
 }
 
 func getSecretFriend(w http.ResponseWriter, r *http.Request) {
