@@ -270,7 +270,7 @@ func runDraw(w http.ResponseWriter, r *http.Request) {
 
 	// Query the participants from the database
 	var participants []Participant
-	sqlStmt := `SELECT * FROM Participants WHERE group_id = ?`
+	sqlStmt := `SELECT * FROM Participants WHERE group_id = ? AND friend_user_id IS NULL`
 	rows, err := db.Query(sqlStmt, groupID)
 	if err != nil {
 		log.Printf("%q: %s\n", err, sqlStmt)
@@ -296,15 +296,17 @@ func runDraw(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Shuffle the participants
-	rand.Seed(time.Now().UnixNano())
 	rand.Shuffle(len(participants), func(i, j int) {
 		participants[i], participants[j] = participants[j], participants[i]
 	})
 
-	// Assign secret friends
+	// Assign secret friends in a circular manner
 	for i := range participants {
-		friendIndex := (i + 1) % len(participants)
-		participants[i].FriendUserID = participants[friendIndex].UserID
+		if (i + 1) == len(participants) {
+			participants[i].FriendUserID = participants[0].UserID
+		} else {
+			participants[i].FriendUserID = participants[i+1].UserID
+		}
 
 		// Update the participant in the database
 		sqlStmt = `UPDATE Participants SET friend_user_id = ? WHERE group_id = ? AND user_id = ?`
