@@ -6,6 +6,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"strings"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -102,15 +103,62 @@ func main() {
 	r := mux.NewRouter()
 	//User endpoints
 	r.HandleFunc("/user", createUser).Methods("POST")
-	r.HandleFunc("/user/{id}", getUser).Methods("GET")
+	r.HandleFunc("/user/signin", signin).Methods("POST")
+	r.HandleFunc("/user/{id}", bearerAuth(getUser)).Methods("GET")
 	//Group endpoints
-	r.HandleFunc("/group", createGroup).Methods("POST")
-	r.HandleFunc("/group/{id}", getGroup).Methods("GET")
-	r.HandleFunc("/group/{id}/participant", addParticipant).Methods("POST")
-	r.HandleFunc("/group/{id}/draw", runDraw).Methods("POST")
-	r.HandleFunc("/group/{id}/friend", getSecretFriend).Methods("GET")
+	r.HandleFunc("/group", bearerAuth(createGroup)).Methods("POST")
+	r.HandleFunc("/group/{id}", bearerAuth(getGroup)).Methods("GET")
+	r.HandleFunc("/group/{id}/participant", bearerAuth(addParticipant)).Methods("POST")
+	r.HandleFunc("/group/{id}/draw", bearerAuth(runDraw)).Methods("POST")
+	r.HandleFunc("/group/{id}/friend", bearerAuth(getSecretFriend)).Methods("GET")
 
 	http.ListenAndServe(":8080", r)
+}
+
+func signin(w http.ResponseWriter, r *http.Request) {
+	//handle post request with user credentials to sign in, validate the user and return a token
+	var user User
+	json.NewDecoder(r.Body).Decode(&user)
+
+	// Open a connection to the SQLite database
+	db, err := sql.Open(DbDriver, DbName)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+
+	// Query the user from the database
+	var dbUser User
+	sqlStmt := `SELECT user_id, user_name, user_email, password
+	FROM Users WHERE user_email = ?`
+	row := db.QueryRow(sqlStmt, user.UserEmail)
+	err = row.Scan(&dbUser.UserID, &dbUser.UserName, &dbUser.UserEmail, &dbUser.Password)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.NotFound(w, r)
+		} else {
+			log.Printf("%q: %s\n", err, sqlStmt)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+		return
+	}
+
+	// Compare the hashed password with the password from the request
+	err = bcrypt.CompareHashAndPassword([]byte(dbUser.Password), []byte(user.Password))
+	if err != nil {
+		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+		return
+	}
+
+	// Generate a token
+	token, err := generateToken(dbUser.UserID)
+	if err != nil {
+		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(token)
 }
 
 func createUser(w http.ResponseWriter, r *http.Request) {
@@ -330,11 +378,39 @@ func runDraw(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(participants)
 }
 
 func getSecretFriend(w http.ResponseWriter, r *http.Request) {
 
+}
+
+// bearerAuth is a middleware function for Bearer Authentication
+func bearerAuth(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" {
+			http.Error(w, "Authorization header missing", http.StatusUnauthorized)
+			return
+		}
+
+		token := strings.TrimPrefix(authHeader, "Bearer ")
+		if !validateToken(token) {
+			http.Error(w, "Invalid token", http.StatusUnauthorized)
+			return
+		}
+
+		next(w, r)
+	}
+}
+
+// validateToken validates the Bearer token
+func validateToken(token string) bool {
+	// Replace with token validation logic
+	return token == "your-secret-token"
+}
+
+// generateToken generates a token for the given user ID
+func generateToken(userID int) (string, error) {
+	// TODO: Replace with token generation logic
+	return "your-secret-token", nil
 }
