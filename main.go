@@ -11,6 +11,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/gorilla/mux"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type Group struct {
@@ -25,6 +26,7 @@ type User struct {
 	UserID      int       `json:"user_id"`
 	UserName    string    `json:"user_name"`
 	UserEmail   string    `json:"user_email"`
+	Password    string    `json:"password"`
 	Gender      string    `json:"gender"`
 	DateOfBirth time.Time `json:"date_of_birth"`
 }
@@ -37,7 +39,6 @@ type Participant struct {
 }
 
 const (
-	// DatabaseDriver is the driver name for the SQLite database
 	DbDriver = "sqlite3"
 	DbName   = "secretsanta.db"
 )
@@ -56,7 +57,8 @@ func main() {
 	CREATE TABLE IF NOT EXISTS Users (
 		user_id INTEGER PRIMARY KEY AUTOINCREMENT,
 		user_name TEXT,
-		user_email TEXT
+		user_email TEXT,
+		password TEXT,
 		gender TEXT,
 		date_of_birth TEXT
 	);
@@ -116,6 +118,14 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 	var user User
 	json.NewDecoder(r.Body).Decode(&user)
 
+	// Hash the password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(user.Password), bcrypt.DefaultCost)
+	if err != nil {
+		http.Error(w, "Failed to hash password", http.StatusInternalServerError)
+		return
+	}
+	user.Password = string(hashedPassword)
+
 	// Open a connection to the SQLite database
 	db, err := sql.Open(DbDriver, DbName)
 	if err != nil {
@@ -125,11 +135,13 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 
 	// Insert the new user into the database
 	sqlStmt := `
-	INSERT INTO Users (user_name, user_email, gender, date_of_birth) VALUES (?, ?, ?, ?);
+	INSERT INTO Users (user_name, user_email, password, gender, date_of_birth) VALUES (?, ?, ?, ?, ?);
 	`
-	_, err = db.Exec(sqlStmt, user.UserName, user.UserEmail)
+
+	_, err = db.Exec(sqlStmt, user.UserName, user.UserEmail, user.Password, user.Gender, user.DateOfBirth)
 	if err != nil {
 		log.Printf("%q: %s\n", err, sqlStmt)
+		http.Error(w, "Failed to create user", http.StatusInternalServerError)
 		return
 	}
 
@@ -177,9 +189,9 @@ func getUser(w http.ResponseWriter, r *http.Request) {
 
 	// Query the user from the database
 	var user User
-	sqlStmt := `SELECT user_id, user_name, user_email, gender, date_of_birth FROM Users WHERE user_id = ?`
+	sqlStmt := `SELECT user_id, user_name, user_email, password, gender, date_of_birth FROM Users WHERE user_id = ?`
 	row := db.QueryRow(sqlStmt, userID)
-	err = row.Scan(&user.UserID, &user.UserName, &user.UserEmail, &user.Gender, &user.DateOfBirth)
+	err = row.Scan(&user.UserID, &user.UserName, &user.UserEmail, &user.Password, &user.Gender, &user.DateOfBirth)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			http.NotFound(w, r)
@@ -296,6 +308,7 @@ func runDraw(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Shuffle the participants
+	rand.Seed(time.Now().UnixNano())
 	rand.Shuffle(len(participants), func(i, j int) {
 		participants[i], participants[j] = participants[j], participants[i]
 	})
