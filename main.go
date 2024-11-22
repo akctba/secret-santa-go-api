@@ -151,7 +151,7 @@ func signin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Generate a token
-	token, err := generateToken(dbUser.UserID)
+	token, err := CreateToken(dbUser.UserID)
 	if err != nil {
 		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
 		return
@@ -394,23 +394,12 @@ func bearerAuth(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		token := strings.TrimPrefix(authHeader, "Bearer ")
-		if !validateToken(token) {
+		_, err := ValidateToken(token)
+		if err != nil {
 			http.Error(w, "Invalid token", http.StatusUnauthorized)
 			return
 		}
 
 		next(w, r)
 	}
-}
-
-// validateToken validates the Bearer token
-func validateToken(token string) bool {
-	// Replace with token validation logic
-	return token == "your-secret-token"
-}
-
-// generateToken generates a token for the given user ID
-func generateToken(userID int) (string, error) {
-	// TODO: Replace with token generation logic
-	return "your-secret-token", nil
 }
