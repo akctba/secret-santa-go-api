@@ -15,90 +15,13 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-type Group struct {
-	GroupID       string    `json:"group_id"`
-	Name          string    `json:"name"`
-	DateCreated   time.Time `json:"date_created"`
-	DateDraw      time.Time `json:"date_draw"`
-	CreatorUserID int       `json:"creator_user_id"`
-}
-
-type User struct {
-	UserID      int       `json:"user_id"`
-	UserName    string    `json:"user_name"`
-	UserEmail   string    `json:"user_email"`
-	Password    string    `json:"password"`
-	Gender      string    `json:"gender"`
-	DateOfBirth time.Time `json:"date_of_birth"`
-}
-
-type Participant struct {
-	GroupID      string    `json:"group_id"`
-	UserID       int       `json:"user_id"`
-	JoinedAt     time.Time `json:"joined_at"`
-	FriendUserID int       `json:"friend_user_id"`
-}
-
 const (
 	DbDriver = "sqlite3"
 	DbName   = "secretsanta.db"
 )
 
 func main() {
-
-	// Open a connection to the SQLite database
-	db, err := sql.Open(DbDriver, DbName)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer db.Close()
-
-	// Create database tables
-	sqlStmt := `
-	CREATE TABLE IF NOT EXISTS Users (
-		user_id INTEGER PRIMARY KEY AUTOINCREMENT,
-		user_name TEXT,
-		user_email TEXT,
-		password TEXT,
-		gender TEXT,
-		date_of_birth TEXT
-	);
-	`
-	_, err = db.Exec(sqlStmt)
-	if err != nil {
-		log.Printf("%q: %s\n", err, sqlStmt)
-		return
-	}
-
-	sqlStmt = `
-	CREATE TABLE IF NOT EXISTS Groups (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		group_name TEXT,
-		date_created TEXT,
-		date_draw TEXT,
-		creator_user_id INTEGER
-	);
-	`
-	_, err = db.Exec(sqlStmt)
-	if err != nil {
-		log.Printf("%q: %s\n", err, sqlStmt)
-		return
-	}
-
-	sqlStmt = `
-	CREATE TABLE IF NOT EXISTS Participants (
-		group_id INTEGER,
-		user_id INTEGER,
-		joined_at TEXT,
-		fried_user_id INTEGER,
-		PRIMARY KEY (group_id, user_id)
-	);
-	`
-	_, err = db.Exec(sqlStmt)
-	if err != nil {
-		log.Printf("%q: %s\n", err, sqlStmt)
-		return
-	}
+	initiateDb()
 
 	r := mux.NewRouter()
 	//User endpoints
