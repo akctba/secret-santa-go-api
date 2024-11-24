@@ -1,27 +1,23 @@
 package main
 
 import (
-	"database/sql"
 	"encoding/json"
 	"log"
 	"math/rand"
 	"net/http"
+	"strconv"
 	"strings"
-	"time"
 
+	"github.com/akctba/secret-santa-go-api/database"
+	"github.com/akctba/secret-santa-go-api/models"
 	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/gorilla/mux"
 	"golang.org/x/crypto/bcrypt"
 )
 
-const (
-	DbDriver = "sqlite3"
-	DbName   = "secretsanta.db"
-)
-
 func main() {
-	initiateDb()
+	database.CreateTables()
 
 	r := mux.NewRouter()
 	//User endpoints
@@ -40,41 +36,30 @@ func main() {
 
 func signin(w http.ResponseWriter, r *http.Request) {
 	//handle post request with user credentials to sign in, validate the user and return a token
-	var user User
-	json.NewDecoder(r.Body).Decode(&user)
+	var request models.UserSignin
+	json.NewDecoder(r.Body).Decode(&request)
 
-	// Open a connection to the SQLite database
-	db, err := sql.Open(DbDriver, DbName)
+	db, err := database.GetDb()
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close()
+	defer database.CloseDb(db)
 
-	// Query the user from the database
-	var dbUser User
-	sqlStmt := `SELECT user_id, user_name, user_email, password
-	FROM Users WHERE user_email = ?`
-	row := db.QueryRow(sqlStmt, user.UserEmail)
-	err = row.Scan(&dbUser.UserID, &dbUser.UserName, &dbUser.UserEmail, &dbUser.Password)
+	user, err := database.GetUserByEmail(db, request.UserEmail)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			http.NotFound(w, r)
-		} else {
-			log.Printf("%q: %s\n", err, sqlStmt)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
+		http.Error(w, "Failed to get user", http.StatusInternalServerError)
 		return
 	}
 
 	// Compare the hashed password with the password from the request
-	err = bcrypt.CompareHashAndPassword([]byte(dbUser.Password), []byte(user.Password))
+	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(request.Password))
 	if err != nil {
 		http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 		return
 	}
 
 	// Generate a token
-	token, err := CreateToken(dbUser.UserID)
+	token, err := CreateToken(user.UserID)
 	if err != nil {
 		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
 		return
@@ -86,7 +71,7 @@ func signin(w http.ResponseWriter, r *http.Request) {
 
 func createUser(w http.ResponseWriter, r *http.Request) {
 	//handle post request to create a user and save it on the database
-	var user User
+	var user models.User
 	json.NewDecoder(r.Body).Decode(&user)
 
 	// Hash the password
@@ -98,23 +83,13 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 	user.Password = string(hashedPassword)
 
 	// Open a connection to the SQLite database
-	db, err := sql.Open(DbDriver, DbName)
+	db, err := database.GetDb()
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close()
+	defer database.CloseDb(db)
 
-	// Insert the new user into the database
-	sqlStmt := `
-	INSERT INTO Users (user_name, user_email, password, gender, date_of_birth) VALUES (?, ?, ?, ?, ?);
-	`
-
-	_, err = db.Exec(sqlStmt, user.UserName, user.UserEmail, user.Password, user.Gender, user.DateOfBirth)
-	if err != nil {
-		log.Printf("%q: %s\n", err, sqlStmt)
-		http.Error(w, "Failed to create user", http.StatusInternalServerError)
-		return
-	}
+	err = database.InsertUser(db, user)
 
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(user)
@@ -122,23 +97,19 @@ func createUser(w http.ResponseWriter, r *http.Request) {
 
 func createGroup(w http.ResponseWriter, r *http.Request) {
 	//handle post request to create a group and save it on the database
-	var group Group
+	var group models.Group
 	json.NewDecoder(r.Body).Decode(&group)
 
 	// Open a connection to the SQLite database
-	db, err := sql.Open(DbDriver, DbName)
+	db, err := database.GetDb()
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close()
+	defer database.CloseDb(db)
 
-	// Insert the new group into the database
-	sqlStmt := `
-	INSERT INTO Groups (group_name, date_created, creator_user_id) VALUES (?, ?, ?);
-	`
-	_, err = db.Exec(sqlStmt, group.GroupID, time.Now(), 1)
+	err = database.InsertGroup(db, group)
 	if err != nil {
-		log.Printf("%q: %s\n", err, sqlStmt)
+		http.Error(w, "Failed to create group", http.StatusInternalServerError)
 		return
 	}
 
@@ -149,57 +120,42 @@ func createGroup(w http.ResponseWriter, r *http.Request) {
 func getUser(w http.ResponseWriter, r *http.Request) {
 	// Extract the user ID from the URL
 	vars := mux.Vars(r)
-	userID := vars["id"]
+	userID, err := strconv.Atoi(vars["id"])
+	if err != nil {
+		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
 
-	// Open a connection to the SQLite database
-	db, err := sql.Open(DbDriver, DbName)
+	db, err := database.GetDb()
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close()
+	defer database.CloseDb(db)
 
-	// Query the user from the database
-	var user User
-	sqlStmt := `SELECT user_id, user_name, user_email, password, gender, date_of_birth FROM Users WHERE user_id = ?`
-	row := db.QueryRow(sqlStmt, userID)
-	err = row.Scan(&user.UserID, &user.UserName, &user.UserEmail, &user.Password, &user.Gender, &user.DateOfBirth)
+	user, err := database.GetUserByID(db, userID)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			http.NotFound(w, r)
-		} else {
-			log.Printf("%q: %s\n", err, sqlStmt)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
+		http.Error(w, "Failed to get user", http.StatusInternalServerError)
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(user)
 }
+
 func getGroup(w http.ResponseWriter, r *http.Request) {
 	// Extract the group ID from the URL
 	vars := mux.Vars(r)
 	groupID := vars["id"]
 
-	// Open a connection to the SQLite database
-	db, err := sql.Open(DbDriver, DbName)
+	db, err := database.GetDb()
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close()
+	defer database.CloseDb(db)
 
-	// Query the group from the database
-	var group Group
-	sqlStmt := `SELECT group_id, group_name, date_created, date_draw, creator_user_id FROM Groups WHERE group_id = ?`
-	row := db.QueryRow(sqlStmt, groupID)
-	err = row.Scan(&group.GroupID, &group.Name, &group.DateCreated, &group.DateDraw, &group.CreatorUserID)
+	group, err := database.GetGroupByID(db, groupID)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			http.NotFound(w, r)
-		} else {
-			log.Printf("%q: %s\n", err, sqlStmt)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-		}
+		http.Error(w, "Failed to get group", http.StatusInternalServerError)
 		return
 	}
 
@@ -213,28 +169,33 @@ func addParticipant(w http.ResponseWriter, r *http.Request) {
 	groupID := vars["id"]
 
 	//handle post request to add a participant to a group and save it on the database
-	var participant Participant
-	json.NewDecoder(r.Body).Decode(&participant)
+	var request models.ParticipantRequest
+	json.NewDecoder(r.Body).Decode(&request)
 
-	// Open a connection to the SQLite database
-	db, err := sql.Open(DbDriver, DbName)
+	db, err := database.GetDb()
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close()
+	defer database.CloseDb(db)
 
-	// Insert the new participant into the database
-	sqlStmt := `
-	INSERT INTO Participants (group_id, user_id, joined_at) VALUES (?, ?, ?);
-	`
-	_, err = db.Exec(sqlStmt, groupID, participant.UserID, time.Now())
+	group, err := database.GetGroupByID(db, groupID)
 	if err != nil {
-		log.Printf("%q: %s\n", err, sqlStmt)
+		http.Error(w, "Failed to get group", http.StatusInternalServerError)
+		return
+	}
+	if request.GroupID != group.GroupID {
+		http.Error(w, "Invalid group ID", http.StatusBadRequest)
+		return
+	}
+
+	err = database.InsertParticipant(db, request)
+	if err != nil {
+		http.Error(w, "Failed to add participant", http.StatusInternalServerError)
 		return
 	}
 
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(participant)
+	json.NewEncoder(w).Encode(request)
 }
 
 // runDraw will run the draw for the group and assign a secret friend to each participant
@@ -244,47 +205,33 @@ func runDraw(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	groupID := vars["id"]
 
-	// Open a connection to the SQLite database
-	db, err := sql.Open(DbDriver, DbName)
+	db, err := database.GetDb()
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close()
+	defer database.CloseDb(db)
 
 	// Query the participants from the database
-	var participants []Participant
-	sqlStmt := `SELECT * FROM Participants WHERE group_id = ? AND friend_user_id IS NULL`
-	rows, err := db.Query(sqlStmt, groupID)
+	participants, err := database.GetParticipantsToDraw(db, groupID)
 	if err != nil {
-		log.Printf("%q: %s\n", err, sqlStmt)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "Failed to get participants", http.StatusInternalServerError)
 		return
 	}
-	defer rows.Close()
 
-	for rows.Next() {
-		var participant Participant
-		if err := rows.Scan(&participant); err != nil {
-			log.Printf("%q: %s\n", err, sqlStmt)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		participants = append(participants, participant)
-	}
-
-	if err := rows.Err(); err != nil {
-		log.Printf("%q: %s\n", err, sqlStmt)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	// If there are no participants to draw, return an error
+	if len(participants) == 0 {
+		http.Error(w, "No participants to draw", http.StatusBadRequest)
 		return
 	}
 
 	// Shuffle the participants
-	rand.Seed(time.Now().UnixNano())
 	rand.Shuffle(len(participants), func(i, j int) {
 		participants[i], participants[j] = participants[j], participants[i]
 	})
 
 	// Assign secret friends in a circular manner
+	// so the last participant will have the first participant as a secret friend
+	// and that is what makes the event more fun!
 	for i := range participants {
 		if (i + 1) == len(participants) {
 			participants[i].FriendUserID = participants[0].UserID
@@ -292,15 +239,14 @@ func runDraw(w http.ResponseWriter, r *http.Request) {
 			participants[i].FriendUserID = participants[i+1].UserID
 		}
 
-		// Update the participant in the database
-		sqlStmt = `UPDATE Participants SET friend_user_id = ? WHERE group_id = ? AND user_id = ?`
-		_, err = db.Exec(sqlStmt, participants[i].FriendUserID, groupID, participants[i].UserID)
+		err = database.UpdateParticipant(db, participants[i])
 		if err != nil {
-			log.Printf("%q: %s\n", err, sqlStmt)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, "Failed to update participant", http.StatusInternalServerError)
 			return
 		}
 	}
+
+	w.WriteHeader(http.StatusOK)
 }
 
 func getSecretFriend(w http.ResponseWriter, r *http.Request) {
