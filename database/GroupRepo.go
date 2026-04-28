@@ -4,19 +4,33 @@ package database
 
 import (
 	"database/sql"
+	"errors"
 	"log"
+	"strconv"
 
 	"github.com/akctba/secret-santa-go-api/models"
 )
 
-func InsertGroup(db *sql.DB, group models.Group) error {
-	sqlStmt := `INSERT INTO Groups(group_id, name, date_created, date_draw, creator_user_id
-	) VALUES (?, ?, ?, ?, ?);`
-	_, err := db.Exec(sqlStmt, group.GroupID, group.Name, group.DateCreated, group.DateDraw, group.CreatorUserID)
+func InsertGroup(db *sql.DB, group *models.Group) error {
+	if group == nil {
+		return errors.New("group is nil")
+	}
+
+	sqlStmt := `INSERT INTO Groups(name, date_created, date_draw, creator_user_id
+	) VALUES (?, ?, ?, ?);`
+	result, err := db.Exec(sqlStmt, group.Name, group.DateCreated, group.DateDraw, group.CreatorUserID)
 	if err != nil {
 		log.Printf("%q: %s\n", err, sqlStmt)
 		return err
 	}
+
+	id, err := result.LastInsertId()
+	if err != nil {
+		return err
+	}
+
+	group.GroupID = strconv.FormatInt(id, 10)
+
 	return nil
 }
 

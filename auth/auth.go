@@ -1,52 +1,63 @@
 package auth
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
+	"fmt"
+	"os"
+	"strconv"
 	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
-// Token holds an authentication token and its metadata.
-type Token struct {
-	UserID    int
-	Token     string
-	ExpiresAt time.Time
-}
-
-var tokenMap = make(map[int]Token)
+const tokenTTL = 5 * time.Minute
 
 // CreateToken generates a new bearer token for the given user ID.
 func CreateToken(userID int) (string, error) {
-	token := Token{
-		UserID:    userID,
-		Token:     createRandomToken(),
-		ExpiresAt: time.Now().Add(5 * time.Minute),
+	claims := jwt.RegisteredClaims{
+		Subject:   strconv.Itoa(userID),
+		ExpiresAt: jwt.NewNumericDate(time.Now().Add(tokenTTL)),
 	}
-	tokenMap[userID] = token
-	return token.Token, nil
-}
 
-func createRandomToken() string {
-	b := make([]byte, 16)
-	_, err := rand.Read(b)
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString(signingKey())
 	if err != nil {
-		panic(err)
+		return "", fmt.Errorf("sign jwt token: %w", err)
 	}
-	return hex.EncodeToString(b)
+
+	return tokenString, nil
 }
 
 // ValidateToken checks that a token is valid and not expired.
 // It returns the associated user ID on success.
 func ValidateToken(token string) (int, error) {
-	for _, t := range tokenMap {
-		if t.Token == token {
-			if time.Now().After(t.ExpiresAt) {
-				delete(tokenMap, t.UserID)
-				return 0, errors.New("token expired")
-			}
-			return t.UserID, nil
+	claims := &jwt.RegisteredClaims{}
+	parsedToken, err := jwt.ParseWithClaims(token, claims, func(t *jwt.Token) (any, error) {
+		if t.Method != jwt.SigningMethodHS256 {
+			return nil, errors.New("unexpected signing method")
 		}
+		return signingKey(), nil
+	})
+	if err != nil {
+		return 0, errors.New("invalid token")
 	}
-	return 0, errors.New("invalid token")
+
+	if !parsedToken.Valid {
+		return 0, errors.New("invalid token")
+	}
+
+	userID, err := strconv.Atoi(claims.Subject)
+	if err != nil {
+		return 0, errors.New("invalid token")
+	}
+
+	return userID, nil
+}
+
+func signingKey() []byte {
+	if value := os.Getenv("JWT_SECRET"); value != "" {
+		return []byte(value)
+	}
+
+	return []byte("secret-santa-dev-secret")
 }

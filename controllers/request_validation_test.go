@@ -106,6 +106,22 @@ func TestCreateGroupReturnsBadRequestForUnknownField(t *testing.T) {
 	}
 }
 
+func TestCreateGroupReturnsBadRequestWhenGroupIDProvided(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/group", strings.NewReader(`{"group_id":"123","name":"xmas"}`))
+	req.Header.Set("Content-Type", "application/json")
+
+	rr := httptest.NewRecorder()
+	CreateGroup(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rr.Code)
+	}
+
+	if !strings.Contains(rr.Body.String(), "group_id must not be provided") {
+		t.Fatalf("expected group_id validation error, got: %s", rr.Body.String())
+	}
+}
+
 func TestAddParticipantReturnsBadRequestForMissingFields(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/group/1/participant", strings.NewReader(`{"group_id":"","user_id":0}`))
 	req.Header.Set("Content-Type", "application/json")
