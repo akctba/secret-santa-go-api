@@ -8,6 +8,7 @@ import (
 	"log"
 	randv2 "math/rand/v2"
 	"net/http"
+	"strings"
 
 	"github.com/akctba/secret-santa-go-api/database"
 	"github.com/akctba/secret-santa-go-api/models"
@@ -28,7 +29,16 @@ func (cryptoSource) Uint64() uint64 {
 // CreateGroup handles POST /group. Persists a new group to the database.
 func CreateGroup(w http.ResponseWriter, r *http.Request) {
 	var group models.Group
-	json.NewDecoder(r.Body).Decode(&group)
+	if err := json.NewDecoder(r.Body).Decode(&group); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	group.Name = strings.TrimSpace(group.Name)
+	if group.Name == "" {
+		http.Error(w, "name is required", http.StatusBadRequest)
+		return
+	}
 
 	db, err := getDB()
 	if err != nil {
@@ -77,7 +87,16 @@ func AddParticipant(w http.ResponseWriter, r *http.Request) {
 	groupID := vars["id"]
 
 	var request models.ParticipantRequest
-	json.NewDecoder(r.Body).Decode(&request)
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	request.GroupID = strings.TrimSpace(request.GroupID)
+	if request.GroupID == "" || request.UserID <= 0 {
+		http.Error(w, "group_id and user_id are required", http.StatusBadRequest)
+		return
+	}
 
 	db, err := getDB()
 	if err != nil {

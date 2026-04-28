@@ -54,7 +54,7 @@ func TestHandlersReturnInternalServerErrorWhenDBUnavailable(t *testing.T) {
 			handler: CreateGroup,
 			method:  http.MethodPost,
 			path:    "/group",
-			body:    `{"group_name":"xmas"}`,
+			body:    `{"name":"xmas"}`,
 		},
 		{
 			name:    "GetGroup returns 500 on DB failure",

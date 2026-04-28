@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/akctba/secret-santa-go-api/auth"
 	"github.com/akctba/secret-santa-go-api/database"
@@ -20,10 +21,43 @@ type createUserRequest struct {
 	Password string `json:"password"`
 }
 
+type userResponse struct {
+	UserID      int       `json:"user_id"`
+	UserName    string    `json:"user_name"`
+	UserEmail   string    `json:"user_email"`
+	Gender      string    `json:"gender"`
+	DateOfBirth time.Time `json:"date_of_birth"`
+}
+
+func toUserResponse(user models.User) userResponse {
+	resp := userResponse{
+		UserID:      user.UserID,
+		UserName:    user.UserName,
+		UserEmail:   user.UserEmail,
+		Gender:      user.Gender,
+		DateOfBirth: user.DateOfBirth,
+	}
+
+	return resp
+}
+
 // Signin handles POST /user/signin. Validates credentials and returns a bearer token.
 func Signin(w http.ResponseWriter, r *http.Request) {
 	var request models.UserSignin
-	json.NewDecoder(r.Body).Decode(&request)
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	email := strings.TrimSpace(request.UserEmail)
+	password := strings.TrimSpace(request.Password)
+	if email == "" || password == "" {
+		http.Error(w, "email and password are required", http.StatusBadRequest)
+		return
+	}
+
+	request.UserEmail = email
+	request.Password = password
 
 	db, err := getDB()
 	if err != nil {
@@ -101,7 +135,7 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(user)
+	json.NewEncoder(w).Encode(toUserResponse(user))
 }
 
 // GetUser handles GET /user/{id}. Returns the user with the given ID.
@@ -128,5 +162,5 @@ func GetUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(user)
+	json.NewEncoder(w).Encode(toUserResponse(user))
 }
