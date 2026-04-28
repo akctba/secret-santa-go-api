@@ -1,4 +1,4 @@
-package main
+package auth
 
 import (
 	"crypto/rand"
@@ -7,21 +7,23 @@ import (
 	"time"
 )
 
+// Token holds an authentication token and its metadata.
 type Token struct {
-	UserId    int
+	UserID    int
 	Token     string
 	ExpiresAt time.Time
 }
 
 var tokenMap = make(map[int]Token)
 
-func CreateToken(userId int) (string, error) {
+// CreateToken generates a new bearer token for the given user ID.
+func CreateToken(userID int) (string, error) {
 	token := Token{
-		UserId:    userId,
+		UserID:    userID,
 		Token:     createRandomToken(),
 		ExpiresAt: time.Now().Add(5 * time.Minute),
 	}
-	tokenMap[userId] = token
+	tokenMap[userID] = token
 	return token.Token, nil
 }
 
@@ -34,14 +36,16 @@ func createRandomToken() string {
 	return hex.EncodeToString(b)
 }
 
+// ValidateToken checks that a token is valid and not expired.
+// It returns the associated user ID on success.
 func ValidateToken(token string) (int, error) {
 	for _, t := range tokenMap {
 		if t.Token == token {
 			if time.Now().After(t.ExpiresAt) {
-				delete(tokenMap, t.UserId)
+				delete(tokenMap, t.UserID)
 				return 0, errors.New("token expired")
 			}
-			return t.UserId, nil
+			return t.UserID, nil
 		}
 	}
 	return 0, errors.New("invalid token")
