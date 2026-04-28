@@ -15,11 +15,9 @@ import (
 )
 
 type createUserRequest struct {
-	Name      string `json:"name"`
-	UserName  string `json:"user_name"`
-	Email     string `json:"email"`
-	UserEmail string `json:"user_email"`
-	Password  string `json:"password"`
+	UserName string `json:"user_name"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
 }
 
 // Signin handles POST /user/signin. Validates credentials and returns a bearer token.
@@ -64,19 +62,12 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	name := strings.TrimSpace(request.UserName)
-	if name == "" {
-		name = strings.TrimSpace(request.Name)
-	}
-
-	email := strings.TrimSpace(request.UserEmail)
-	if email == "" {
-		email = strings.TrimSpace(request.Email)
-	}
+	email := strings.TrimSpace(request.Email)
 
 	password := request.Password
 
 	if name == "" || email == "" || password == "" {
-		http.Error(w, "name, email and password are required", http.StatusBadRequest)
+		http.Error(w, "user_name, email and password are required", http.StatusBadRequest)
 		return
 	}
 
