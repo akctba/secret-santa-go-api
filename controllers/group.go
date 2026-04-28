@@ -2,12 +2,15 @@ package controllers
 
 import (
 	"crypto/rand"
+	"database/sql"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	randv2 "math/rand/v2"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/akctba/secret-santa-go-api/database"
@@ -177,4 +180,49 @@ func RunDraw(w http.ResponseWriter, r *http.Request) {
 
 // GetSecretFriend handles GET /group/{id}/friend. Returns the authenticated user's assigned friend.
 func GetSecretFriend(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	groupID, err := strconv.Atoi(vars["id"])
+	if err != nil {
+		http.Error(w, "Invalid group ID", http.StatusBadRequest)
+		return
+	}
+
+	userID, ok := authenticatedUserIDFromRequest(r)
+	if !ok {
+		http.Error(w, "Invalid token", http.StatusUnauthorized)
+		return
+	}
+
+	db, err := getDB()
+	if err != nil {
+		log.Printf("failed to open db in GetSecretFriend: %v", err)
+		http.Error(w, "Failed to connect to database", http.StatusInternalServerError)
+		return
+	}
+	defer database.CloseDb(db)
+
+	participant, err := database.GetUserParticipant(db, userID, groupID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			http.Error(w, "User is not a participant of this group", http.StatusForbidden)
+			return
+		}
+
+		http.Error(w, "Failed to get participant", http.StatusInternalServerError)
+		return
+	}
+
+	if participant.FriendUserID == 0 {
+		http.Error(w, "Secret friend has not been drawn yet", http.StatusConflict)
+		return
+	}
+
+	friend, err := database.GetUserByID(db, participant.FriendUserID)
+	if err != nil {
+		http.Error(w, "Failed to get secret friend", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(toUserResponse(friend))
 }
