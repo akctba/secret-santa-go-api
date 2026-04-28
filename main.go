@@ -25,6 +25,8 @@ func main() {
 	database.CreateTables()
 
 	r := mux.NewRouter()
+	r.Handle("/docs", http.RedirectHandler("/docs/", http.StatusMovedPermanently))
+	r.PathPrefix("/docs/").Handler(http.StripPrefix("/docs", http.FileServer(http.Dir("docs"))))
 	routes.Register(r)
 	handler := corsHandler(r)
 
