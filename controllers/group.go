@@ -30,9 +30,11 @@ func CreateGroup(w http.ResponseWriter, r *http.Request) {
 	var group models.Group
 	json.NewDecoder(r.Body).Decode(&group)
 
-	db, err := database.GetDb()
+	db, err := getDB()
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("failed to open db in CreateGroup: %v", err)
+		http.Error(w, "Failed to connect to database", http.StatusInternalServerError)
+		return
 	}
 	defer database.CloseDb(db)
 
@@ -51,9 +53,11 @@ func GetGroup(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	groupID := vars["id"]
 
-	db, err := database.GetDb()
+	db, err := getDB()
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("failed to open db in GetGroup: %v", err)
+		http.Error(w, "Failed to connect to database", http.StatusInternalServerError)
+		return
 	}
 	defer database.CloseDb(db)
 
@@ -75,9 +79,11 @@ func AddParticipant(w http.ResponseWriter, r *http.Request) {
 	var request models.ParticipantRequest
 	json.NewDecoder(r.Body).Decode(&request)
 
-	db, err := database.GetDb()
+	db, err := getDB()
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("failed to open db in AddParticipant: %v", err)
+		http.Error(w, "Failed to connect to database", http.StatusInternalServerError)
+		return
 	}
 	defer database.CloseDb(db)
 
@@ -106,9 +112,11 @@ func RunDraw(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	groupID := vars["id"]
 
-	db, err := database.GetDb()
+	db, err := getDB()
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("failed to open db in RunDraw: %v", err)
+		http.Error(w, "Failed to connect to database", http.StatusInternalServerError)
+		return
 	}
 	defer database.CloseDb(db)
 
