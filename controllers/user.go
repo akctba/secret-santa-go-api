@@ -25,9 +25,11 @@ func Signin(w http.ResponseWriter, r *http.Request) {
 	var request models.UserSignin
 	json.NewDecoder(r.Body).Decode(&request)
 
-	db, err := database.GetDb()
+	db, err := getDB()
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("failed to open db in Signin: %v", err)
+		http.Error(w, "Failed to connect to database", http.StatusInternalServerError)
+		return
 	}
 	defer database.CloseDb(db)
 
@@ -84,9 +86,11 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	user.Password = string(hashedPassword)
 
-	db, err := database.GetDb()
+	db, err := getDB()
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("failed to open db in CreateUser: %v", err)
+		http.Error(w, "Failed to connect to database", http.StatusInternalServerError)
+		return
 	}
 	defer database.CloseDb(db)
 
@@ -109,9 +113,11 @@ func GetUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db, err := database.GetDb()
+	db, err := getDB()
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("failed to open db in GetUser: %v", err)
+		http.Error(w, "Failed to connect to database", http.StatusInternalServerError)
+		return
 	}
 	defer database.CloseDb(db)
 
