@@ -30,6 +30,11 @@ func BearerAuth(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
+		if !strings.HasPrefix(authHeader, "Bearer ") {
+			http.Error(w, "Invalid token", http.StatusUnauthorized)
+			return
+		}
+
 		token := strings.TrimPrefix(authHeader, "Bearer ")
 		userID, err := auth.ValidateToken(token)
 		if err != nil {
