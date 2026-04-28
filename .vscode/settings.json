@@ -1,6 +1,9 @@
 {
     "chat.tools.terminal.autoApprove": {
         "go test": true,
+        "gofmt": true,
         "git status": true,
+        "git pull": true,
+        "git checkout": true,
     }
 }

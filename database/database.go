@@ -56,7 +56,7 @@ func CreateTables() {
 		group_id INTEGER,
 		user_id INTEGER,
 		joined_at TEXT,
-		fried_user_id INTEGER,
+		friend_user_id INTEGER,
 		PRIMARY KEY (group_id, user_id)
 	);
 	`
@@ -65,6 +65,64 @@ func CreateTables() {
 		log.Printf("%q: %s\n", err, sqlStmt)
 		return
 	}
+
+	if err := ensureParticipantFriendColumn(db); err != nil {
+		log.Printf("ensure participant friend_user_id column: %v\n", err)
+	}
+}
+
+func ensureParticipantFriendColumn(db *sql.DB) error {
+	hasFriend, err := participantColumnExists(db, "friend_user_id")
+	if err != nil {
+		return err
+	}
+	if hasFriend {
+		return nil
+	}
+
+	hasFried, err := participantColumnExists(db, "fried_user_id")
+	if err != nil {
+		return err
+	}
+	if !hasFried {
+		return nil
+	}
+
+	if _, err := db.Exec(`ALTER TABLE Participants RENAME COLUMN fried_user_id TO friend_user_id;`); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func participantColumnExists(db *sql.DB, columnName string) (bool, error) {
+	rows, err := db.Query(`PRAGMA table_info(Participants);`)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name string
+		var dataType string
+		var notNull int
+		var defaultValue sql.NullString
+		var pk int
+
+		if err := rows.Scan(&cid, &name, &dataType, &notNull, &defaultValue, &pk); err != nil {
+			return false, err
+		}
+		if name == columnName {
+			return true, nil
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return false, err
+	}
+
+	return false, nil
 }
 
 func GetDb() (*sql.DB, error) {
