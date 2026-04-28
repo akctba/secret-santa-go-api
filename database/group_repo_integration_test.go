@@ -44,15 +44,18 @@ func TestGroupRepoCRUD(t *testing.T) {
 
 	now := time.Now().UTC().Truncate(time.Second)
 	group := models.Group{
-		GroupID:       "1",
 		Name:          "Holiday Crew",
 		DateCreated:   now,
 		DateDraw:      now.Add(24 * time.Hour),
 		CreatorUserID: 42,
 	}
 
-	if err := InsertGroup(db, group); err != nil {
+	if err := InsertGroup(db, &group); err != nil {
 		t.Fatalf("InsertGroup returned error: %v", err)
+	}
+
+	if group.GroupID == "" {
+		t.Fatal("expected generated group id after insert")
 	}
 
 	got, err := GetGroupByID(db, group.GroupID)
@@ -90,5 +93,38 @@ func TestGroupRepoCRUD(t *testing.T) {
 	_, err = GetGroupByID(db, group.GroupID)
 	if !errors.Is(err, sql.ErrNoRows) {
 		t.Fatalf("expected sql.ErrNoRows after delete, got %v", err)
+	}
+}
+
+func TestInsertGroupIgnoresProvidedGroupID(t *testing.T) {
+	db := newGroupTestDB(t)
+
+	group := models.Group{
+		GroupID:       "9999",
+		Name:          "No Client ID",
+		DateCreated:   time.Now().UTC().Truncate(time.Second),
+		DateDraw:      time.Now().UTC().Add(24 * time.Hour).Truncate(time.Second),
+		CreatorUserID: 7,
+	}
+
+	if err := InsertGroup(db, &group); err != nil {
+		t.Fatalf("InsertGroup returned error: %v", err)
+	}
+
+	if group.GroupID == "" {
+		t.Fatal("expected generated group id after insert")
+	}
+
+	if group.GroupID == "9999" {
+		t.Fatalf("expected generated id instead of provided id, got %q", group.GroupID)
+	}
+
+	got, err := GetGroupByID(db, group.GroupID)
+	if err != nil {
+		t.Fatalf("GetGroupByID returned error: %v", err)
+	}
+
+	if got.Name != group.Name {
+		t.Fatalf("expected name %q, got %q", group.Name, got.Name)
 	}
 }

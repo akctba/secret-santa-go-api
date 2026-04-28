@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/akctba/secret-santa-go-api/database"
 	"github.com/akctba/secret-santa-go-api/models"
@@ -20,6 +21,14 @@ import (
 
 // cryptoSource implements randv2.Source using crypto/rand for cryptographically secure randomness.
 type cryptoSource struct{}
+
+type createGroupRequest struct {
+	GroupID       *string   `json:"group_id"`
+	Name          string    `json:"name"`
+	DateCreated   time.Time `json:"date_created"`
+	DateDraw      time.Time `json:"date_draw"`
+	CreatorUserID int       `json:"creator_user_id"`
+}
 
 func (cryptoSource) Uint64() uint64 {
 	var b [8]byte
@@ -31,10 +40,22 @@ func (cryptoSource) Uint64() uint64 {
 
 // CreateGroup handles POST /group. Persists a new group to the database.
 func CreateGroup(w http.ResponseWriter, r *http.Request) {
-	var group models.Group
-	if err := decodeRequestJSON(r, &group); err != nil {
+	var request createGroupRequest
+	if err := decodeRequestJSON(r, &request); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
+	}
+
+	if request.GroupID != nil {
+		http.Error(w, "group_id must not be provided", http.StatusBadRequest)
+		return
+	}
+
+	group := models.Group{
+		Name:          request.Name,
+		DateCreated:   request.DateCreated,
+		DateDraw:      request.DateDraw,
+		CreatorUserID: request.CreatorUserID,
 	}
 
 	group.Name = strings.TrimSpace(group.Name)
@@ -51,7 +72,7 @@ func CreateGroup(w http.ResponseWriter, r *http.Request) {
 	}
 	defer database.CloseDb(db)
 
-	err = database.InsertGroup(db, group)
+	err = database.InsertGroup(db, &group)
 	if err != nil {
 		http.Error(w, "Failed to create group", http.StatusInternalServerError)
 		return
