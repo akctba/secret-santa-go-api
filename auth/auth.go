@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -16,6 +17,13 @@ const (
 
 	accessTokenType  = "access"
 	refreshTokenType = "refresh"
+
+	minJWTSecretLength = 32
+	appEnvVar          = "APP_ENV"
+
+	envLocal = "LOCAL"
+	envDev   = "DEV"
+	envProd  = "PROD"
 )
 
 type tokenClaims struct {
@@ -102,5 +110,46 @@ func signingKey() []byte {
 		return []byte(value)
 	}
 
-	return []byte("secret-santa-dev-secret")
+	if currentEnvironment() == envLocal {
+		return []byte("secret-santa-dev-secret")
+	}
+
+	return nil
+}
+
+// ValidateJWTConfig checks whether JWT signing configuration is safe to use.
+func ValidateJWTConfig() error {
+	env := currentEnvironment()
+	if env != envLocal && env != envDev && env != envProd {
+		return errors.New("APP_ENV must be one of LOCAL, DEV, PROD")
+	}
+
+	jwtSecret := os.Getenv("JWT_SECRET")
+	if jwtSecret == "" {
+		if env == envLocal {
+			return nil
+		}
+
+		return errors.New("JWT_SECRET must be set")
+	}
+
+	if env != envLocal && len(jwtSecret) < minJWTSecretLength {
+		return fmt.Errorf("JWT_SECRET must be at least %d characters", minJWTSecretLength)
+	}
+
+	return nil
+}
+
+// ResolvedEnvironment returns the effective application environment.
+func ResolvedEnvironment() string {
+	return currentEnvironment()
+}
+
+func currentEnvironment() string {
+	envValue := strings.TrimSpace(strings.ToUpper(os.Getenv(appEnvVar)))
+	if envValue == "" {
+		return envProd
+	}
+
+	return envValue
 }

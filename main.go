@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/akctba/secret-santa-go-api/auth"
 	"github.com/akctba/secret-santa-go-api/database"
 	"github.com/akctba/secret-santa-go-api/routes"
 	_ "github.com/mattn/go-sqlite3"
@@ -16,6 +17,11 @@ import (
 )
 
 func main() {
+	if err := auth.ValidateJWTConfig(); err != nil {
+		log.Fatalf("invalid JWT configuration: %v", err)
+	}
+	log.Printf("application starting in %s environment", auth.ResolvedEnvironment())
+
 	database.CreateTables()
 
 	r := mux.NewRouter()
