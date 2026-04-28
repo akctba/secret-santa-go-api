@@ -13,6 +13,7 @@ This API allows users to create groups for Secret Santa, add participants to the
 - Add participants to groups
 - Run a draw to assign secret friends
 - Retrieve user and group information
+- OpenAPI documentation with interactive docs viewer
 
 ## Setup
 ### Prerequisites
@@ -53,6 +54,13 @@ This API allows users to create groups for Secret Santa, add participants to the
     If this is not set, cross-origin browser requests are disabled.
 
 3. The API will be available at `http://localhost:8080`.
+
+### API Documentation
+
+- OpenAPI specification: `docs/openapi.yaml`
+- Interactive docs viewer (Swagger UI): `http://localhost:8080/docs/`
+
+The API endpoints are versioned under the `/v1` prefix.
 
 ### Running Tests
 
