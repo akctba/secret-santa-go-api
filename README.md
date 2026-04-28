@@ -47,7 +47,8 @@ This API allows users to create groups for Secret Santa, add participants to the
 
 ### Environment Variables
 
-- `JWT_SECRET`: Optional secret used to sign bearer tokens.
+- `APP_ENV`: Runtime environment (`LOCAL`, `DEV`, `PROD`). If not set, defaults to `PROD`.
+- `JWT_SECRET`: Required signing secret for bearer tokens in `DEV` and `PROD` (minimum 32 characters). In `LOCAL`, a development fallback secret is allowed when this variable is not set.
 - `CORS_ALLOWED_ORIGINS`: Comma-separated list of allowed web origins for CORS (for example: `http://localhost:3000,https://app.example.com`).
     If this is not set, cross-origin browser requests are disabled.
 

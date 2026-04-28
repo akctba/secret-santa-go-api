@@ -27,6 +27,51 @@ func TestCreateAndValidateToken(t *testing.T) {
 	}
 }
 
+func TestValidateJWTConfigRequiresSecretInDev(t *testing.T) {
+	t.Setenv("JWT_SECRET", "")
+	t.Setenv("APP_ENV", "DEV")
+
+	if err := ValidateJWTConfig(); err == nil {
+		t.Fatal("ValidateJWTConfig expected error when JWT_SECRET is missing")
+	}
+}
+
+func TestValidateJWTConfigAllowsFallbackInLocal(t *testing.T) {
+	t.Setenv("JWT_SECRET", "")
+	t.Setenv("APP_ENV", "LOCAL")
+
+	if err := ValidateJWTConfig(); err != nil {
+		t.Fatalf("ValidateJWTConfig returned error: %v", err)
+	}
+}
+
+func TestValidateJWTConfigRejectsShortSecretOutsideLocal(t *testing.T) {
+	t.Setenv("JWT_SECRET", "test-secret")
+	t.Setenv("APP_ENV", "PROD")
+
+	if err := ValidateJWTConfig(); err == nil {
+		t.Fatal("ValidateJWTConfig expected error for short JWT_SECRET")
+	}
+}
+
+func TestValidateJWTConfigAcceptsStrongSecretInProd(t *testing.T) {
+	t.Setenv("JWT_SECRET", "12345678901234567890123456789012")
+	t.Setenv("APP_ENV", "PROD")
+
+	if err := ValidateJWTConfig(); err != nil {
+		t.Fatalf("ValidateJWTConfig returned error: %v", err)
+	}
+}
+
+func TestValidateJWTConfigRejectsInvalidEnvironment(t *testing.T) {
+	t.Setenv("JWT_SECRET", "12345678901234567890123456789012")
+	t.Setenv("APP_ENV", "STAGING")
+
+	if err := ValidateJWTConfig(); err == nil {
+		t.Fatal("ValidateJWTConfig expected error for invalid APP_ENV")
+	}
+}
+
 func TestValidateTokenInvalidToken(t *testing.T) {
 	t.Setenv("JWT_SECRET", "test-secret")
 
