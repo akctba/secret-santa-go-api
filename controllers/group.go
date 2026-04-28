@@ -29,7 +29,7 @@ func (cryptoSource) Uint64() uint64 {
 // CreateGroup handles POST /group. Persists a new group to the database.
 func CreateGroup(w http.ResponseWriter, r *http.Request) {
 	var group models.Group
-	if err := json.NewDecoder(r.Body).Decode(&group); err != nil {
+	if err := decodeRequestJSON(r, &group); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -87,7 +87,7 @@ func AddParticipant(w http.ResponseWriter, r *http.Request) {
 	groupID := vars["id"]
 
 	var request models.ParticipantRequest
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+	if err := decodeRequestJSON(r, &request); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}

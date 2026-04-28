@@ -57,6 +57,55 @@ func TestCreateGroupReturnsBadRequestForMalformedJSON(t *testing.T) {
 	}
 }
 
+func TestCreateUserReturnsBadRequestForMalformedJSON(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/user", strings.NewReader(`{"user_name":"alice",`))
+	req.Header.Set("Content-Type", "application/json")
+
+	rr := httptest.NewRecorder()
+	CreateUser(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rr.Code)
+	}
+
+	if !strings.Contains(rr.Body.String(), "Invalid request body") {
+		t.Fatalf("expected invalid body error, got: %s", rr.Body.String())
+	}
+}
+
+func TestAddParticipantReturnsBadRequestForMalformedJSON(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/group/1/participant", strings.NewReader(`{"group_id":"1","user_id":`))
+	req.Header.Set("Content-Type", "application/json")
+	req = mux.SetURLVars(req, map[string]string{"id": "1"})
+
+	rr := httptest.NewRecorder()
+	AddParticipant(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rr.Code)
+	}
+
+	if !strings.Contains(rr.Body.String(), "Invalid request body") {
+		t.Fatalf("expected invalid body error, got: %s", rr.Body.String())
+	}
+}
+
+func TestCreateGroupReturnsBadRequestForUnknownField(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/group", strings.NewReader(`{"name":"xmas","unexpected":true}`))
+	req.Header.Set("Content-Type", "application/json")
+
+	rr := httptest.NewRecorder()
+	CreateGroup(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rr.Code)
+	}
+
+	if !strings.Contains(rr.Body.String(), "Invalid request body") {
+		t.Fatalf("expected invalid body error, got: %s", rr.Body.String())
+	}
+}
+
 func TestAddParticipantReturnsBadRequestForMissingFields(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/group/1/participant", strings.NewReader(`{"group_id":"","user_id":0}`))
 	req.Header.Set("Content-Type", "application/json")

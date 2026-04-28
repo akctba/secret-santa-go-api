@@ -44,7 +44,7 @@ func toUserResponse(user models.User) userResponse {
 // Signin handles POST /user/signin. Validates credentials and returns a bearer token.
 func Signin(w http.ResponseWriter, r *http.Request) {
 	var request models.UserSignin
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+	if err := decodeRequestJSON(r, &request); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
@@ -92,7 +92,7 @@ func Signin(w http.ResponseWriter, r *http.Request) {
 // CreateUser handles POST /user. Hashes the password and persists the new user.
 func CreateUser(w http.ResponseWriter, r *http.Request) {
 	var request createUserRequest
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+	if err := decodeRequestJSON(r, &request); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
