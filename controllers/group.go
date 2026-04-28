@@ -123,6 +123,8 @@ func RunDraw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A new Rand is created per request because math/rand/v2.Rand is not safe for concurrent use.
+	// cryptoSource itself is stateless so construction overhead is negligible.
 	randv2.New(cryptoSource{}).Shuffle(len(participants), func(i, j int) {
 		participants[i], participants[j] = participants[j], participants[i]
 	})
