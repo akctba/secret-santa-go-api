@@ -1,15 +1,29 @@
 package controllers
 
 import (
+	"crypto/rand"
+	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"log"
-	"math/rand"
+	randv2 "math/rand/v2"
 	"net/http"
 
 	"github.com/akctba/secret-santa-go-api/database"
 	"github.com/akctba/secret-santa-go-api/models"
 	"github.com/gorilla/mux"
 )
+
+// cryptoSource implements randv2.Source using crypto/rand for cryptographically secure randomness.
+type cryptoSource struct{}
+
+func (cryptoSource) Uint64() uint64 {
+	var b [8]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		panic(fmt.Errorf("crypto/rand: failed to generate random number: %w", err))
+	}
+	return binary.LittleEndian.Uint64(b[:])
+}
 
 // CreateGroup handles POST /group. Persists a new group to the database.
 func CreateGroup(w http.ResponseWriter, r *http.Request) {
@@ -109,7 +123,7 @@ func RunDraw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rand.Shuffle(len(participants), func(i, j int) {
+	randv2.New(cryptoSource{}).Shuffle(len(participants), func(i, j int) {
 		participants[i], participants[j] = participants[j], participants[i]
 	})
 
