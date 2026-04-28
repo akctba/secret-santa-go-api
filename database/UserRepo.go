@@ -90,7 +90,7 @@ func GetAllUsers(db *sql.DB) ([]models.User, error) {
 
 func GetUserGroups(db *sql.DB, id int) ([]models.Group, error) {
 	var groups []models.Group
-	sqlStmt := `SELECT g.group_id, g.group_name, g.date_created, g.date_draw, g.creator_user_id
+	sqlStmt := `SELECT g.group_id, g.name, g.date_created, g.date_draw, g.creator_user_id
 	FROM Groups g
 	JOIN Participants p ON g.group_id = p.group_id
 	WHERE p.user_id = ?;`
