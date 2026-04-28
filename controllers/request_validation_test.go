@@ -41,6 +41,38 @@ func TestSigninReturnsBadRequestForMissingFields(t *testing.T) {
 	}
 }
 
+func TestRefreshTokenReturnsBadRequestForMalformedJSON(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/user/refresh", strings.NewReader(`{"refresh_token":"abc"`))
+	req.Header.Set("Content-Type", "application/json")
+
+	rr := httptest.NewRecorder()
+	RefreshToken(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rr.Code)
+	}
+
+	if !strings.Contains(rr.Body.String(), "Invalid request body") {
+		t.Fatalf("expected invalid body error, got: %s", rr.Body.String())
+	}
+}
+
+func TestRefreshTokenReturnsBadRequestForMissingField(t *testing.T) {
+	req := httptest.NewRequest(http.MethodPost, "/user/refresh", strings.NewReader(`{"refresh_token":""}`))
+	req.Header.Set("Content-Type", "application/json")
+
+	rr := httptest.NewRecorder()
+	RefreshToken(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, rr.Code)
+	}
+
+	if !strings.Contains(rr.Body.String(), "refresh_token is required") {
+		t.Fatalf("expected missing field error, got: %s", rr.Body.String())
+	}
+}
+
 func TestCreateGroupReturnsBadRequestForMalformedJSON(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/group", strings.NewReader(`{"name":"xmas"`))
 	req.Header.Set("Content-Type", "application/json")

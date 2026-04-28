@@ -8,8 +8,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/akctba/secret-santa-go-api/auth"
 	"github.com/gorilla/mux"
 	_ "github.com/mattn/go-sqlite3"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func setupUserContractTestDB(t *testing.T) *sql.DB {
@@ -106,5 +108,103 @@ func TestGetUserResponseOmitsPassword(t *testing.T) {
 	payload := decodeJSONBody(t, rr.Body.String())
 	if _, ok := payload["password"]; ok {
 		t.Fatalf("expected response to omit password, got: %s", rr.Body.String())
+	}
+}
+
+func TestSigninResponseReturnsAccessAndRefreshTokens(t *testing.T) {
+	t.Setenv("JWT_SECRET", "test-secret")
+
+	db := setupUserContractTestDB(t)
+	withTestDB(t, db)
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte("secret123"), bcrypt.DefaultCost)
+	if err != nil {
+		t.Fatalf("hash password: %v", err)
+	}
+
+	if _, err := db.Exec(`INSERT INTO Users (user_id, user_name, user_email, password) VALUES (1, 'Alice', 'alice@example.com', ?)`, string(hashedPassword)); err != nil {
+		t.Fatalf("insert test user: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/user/signin", strings.NewReader(`{"email":"alice@example.com","password":"secret123"}`))
+	req.Header.Set("Content-Type", "application/json")
+
+	rr := httptest.NewRecorder()
+	Signin(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d, body: %s", http.StatusOK, rr.Code, rr.Body.String())
+	}
+
+	payload := decodeJSONBody(t, rr.Body.String())
+	accessToken, ok := payload["access_token"].(string)
+	if !ok || accessToken == "" {
+		t.Fatalf("expected access_token in response, got: %s", rr.Body.String())
+	}
+
+	refreshToken, ok := payload["refresh_token"].(string)
+	if !ok || refreshToken == "" {
+		t.Fatalf("expected refresh_token in response, got: %s", rr.Body.String())
+	}
+
+	if _, err := auth.ValidateToken(accessToken); err != nil {
+		t.Fatalf("ValidateToken returned error: %v", err)
+	}
+
+	if _, err := auth.ValidateRefreshToken(refreshToken); err != nil {
+		t.Fatalf("ValidateRefreshToken returned error: %v", err)
+	}
+}
+
+func TestRefreshTokenReturnsNewAccessToken(t *testing.T) {
+	t.Setenv("JWT_SECRET", "test-secret")
+
+	refreshToken, err := auth.CreateRefreshToken(42)
+	if err != nil {
+		t.Fatalf("CreateRefreshToken returned error: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/user/refresh", strings.NewReader(`{"refresh_token":"`+refreshToken+`"}`))
+	req.Header.Set("Content-Type", "application/json")
+
+	rr := httptest.NewRecorder()
+	RefreshToken(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected status %d, got %d, body: %s", http.StatusOK, rr.Code, rr.Body.String())
+	}
+
+	payload := decodeJSONBody(t, rr.Body.String())
+	accessToken, ok := payload["access_token"].(string)
+	if !ok || accessToken == "" {
+		t.Fatalf("expected access_token in response, got: %s", rr.Body.String())
+	}
+
+	userID, err := auth.ValidateToken(accessToken)
+	if err != nil {
+		t.Fatalf("ValidateToken returned error: %v", err)
+	}
+
+	if userID != 42 {
+		t.Fatalf("ValidateToken returned %d, want 42", userID)
+	}
+}
+
+func TestRefreshTokenRejectsAccessToken(t *testing.T) {
+	t.Setenv("JWT_SECRET", "test-secret")
+
+	accessToken, err := auth.CreateAccessToken(42)
+	if err != nil {
+		t.Fatalf("CreateAccessToken returned error: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/user/refresh", strings.NewReader(`{"refresh_token":"`+accessToken+`"}`))
+	req.Header.Set("Content-Type", "application/json")
+
+	rr := httptest.NewRecorder()
+	RefreshToken(rr, req)
+
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status %d, got %d, body: %s", http.StatusUnauthorized, rr.Code, rr.Body.String())
 	}
 }

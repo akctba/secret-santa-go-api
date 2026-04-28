@@ -38,9 +38,12 @@ func TestValidateTokenInvalidToken(t *testing.T) {
 func TestValidateTokenExpiredToken(t *testing.T) {
 	t.Setenv("JWT_SECRET", "test-secret")
 
-	claims := jwt.RegisteredClaims{
-		Subject:   strconv.Itoa(7),
-		ExpiresAt: jwt.NewNumericDate(time.Now().Add(-1 * time.Minute)),
+	claims := tokenClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   strconv.Itoa(7),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(-1 * time.Minute)),
+		},
+		TokenType: accessTokenType,
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString(signingKey())
@@ -50,6 +53,37 @@ func TestValidateTokenExpiredToken(t *testing.T) {
 
 	if _, err := ValidateToken(tokenString); err == nil {
 		t.Fatal("ValidateToken expected error for expired token")
+	}
+}
+
+func TestValidateTokenRejectsRefreshToken(t *testing.T) {
+	t.Setenv("JWT_SECRET", "test-secret")
+
+	refreshToken, err := CreateRefreshToken(42)
+	if err != nil {
+		t.Fatalf("CreateRefreshToken returned error: %v", err)
+	}
+
+	if _, err := ValidateToken(refreshToken); err == nil {
+		t.Fatal("ValidateToken expected error for refresh token")
+	}
+}
+
+func TestCreateAndValidateRefreshToken(t *testing.T) {
+	t.Setenv("JWT_SECRET", "test-secret")
+
+	refreshToken, err := CreateRefreshToken(42)
+	if err != nil {
+		t.Fatalf("CreateRefreshToken returned error: %v", err)
+	}
+
+	userID, err := ValidateRefreshToken(refreshToken)
+	if err != nil {
+		t.Fatalf("ValidateRefreshToken returned error: %v", err)
+	}
+
+	if userID != 42 {
+		t.Fatalf("ValidateRefreshToken returned %d, want 42", userID)
 	}
 }
 
