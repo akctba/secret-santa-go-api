@@ -1,7 +1,9 @@
 package main
 
 import (
+	"log"
 	"net/http"
+	"time"
 
 	"github.com/akctba/secret-santa-go-api/database"
 	"github.com/akctba/secret-santa-go-api/routes"
@@ -16,5 +18,15 @@ func main() {
 	r := mux.NewRouter()
 	routes.Register(r)
 
-	http.ListenAndServe(":8080", r)
+	server := &http.Server{
+		Addr:         ":8080",
+		Handler:      r,
+		ReadTimeout:  10 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Fatalf("server failed: %v", err)
+	}
 }
