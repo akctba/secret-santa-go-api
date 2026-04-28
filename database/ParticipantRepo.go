@@ -44,27 +44,46 @@ func DeleteParticipant(db *sql.DB, userId int, groupId int) error {
 
 func GetParticipantByUserID(db *sql.DB, userID string) ([]models.UserParticipant, error) {
 	var participants []models.UserParticipant
-	sqlStmt := `SELECT group_id, user_id, joined_at, user_name, user_email, gender, date_of_birth
-	FROM Participants WHERE user_id = ?;`
+	sqlStmt := `SELECT p.group_id, p.user_id, u.user_name, u.user_email, u.gender, u.date_of_birth, p.joined_at
+	FROM Participants p
+	JOIN Users u ON u.user_id = p.user_id
+	WHERE p.user_id = ?;`
 	rows, err := db.Query(sqlStmt, userID)
 	if err != nil {
 		return participants, err
 	}
+	defer rows.Close()
 	for rows.Next() {
 		var participant models.UserParticipant
-		err := rows.Scan(&participant.GroupID, &participant.UserID, &participant.JoinedAt, &participant.UserName,
-			&participant.UserEmail, &participant.Gender, &participant.DateOfBirth)
+		var dateOfBirthValue any
+		var joinedAtValue any
+
+		err := rows.Scan(&participant.GroupID, &participant.UserID, &participant.UserName,
+			&participant.UserEmail, &participant.Gender, &dateOfBirthValue, &joinedAtValue)
 		if err != nil {
 			return participants, err
 		}
+
+		participant.DateOfBirth, err = parseDBTime(dateOfBirthValue)
+		if err != nil {
+			return participants, err
+		}
+		participant.JoinedAt, err = parseDBTime(joinedAtValue)
+		if err != nil {
+			return participants, err
+		}
+
 		participants = append(participants, participant)
+	}
+	if err := rows.Err(); err != nil {
+		return participants, err
 	}
 	return participants, nil
 }
 
 func GetParticipantsByGroupID(db *sql.DB, id string) ([]models.UserParticipant, error) {
 	var participants []models.UserParticipant
-	sqlStmt := `SELECT u.user_id, u.user_name, p.joined_at, u.user_email, 
+	sqlStmt := `SELECT p.group_id, u.user_id, u.user_name, u.user_email, u.gender, u.date_of_birth, p.joined_at
 	FROM Users u
 	JOIN Participants p ON u.user_id = p.user_id
 	WHERE p.group_id = ?;`
@@ -76,11 +95,28 @@ func GetParticipantsByGroupID(db *sql.DB, id string) ([]models.UserParticipant, 
 	defer rows.Close()
 	for rows.Next() {
 		var participant models.UserParticipant
-		err := rows.Scan(&participant.UserID, &participant.UserName)
+		var dateOfBirthValue any
+		var joinedAtValue any
+
+		err := rows.Scan(&participant.GroupID, &participant.UserID, &participant.UserName,
+			&participant.UserEmail, &participant.Gender, &dateOfBirthValue, &joinedAtValue)
 		if err != nil {
-			log.Fatal(err)
+			return participants, err
 		}
+
+		participant.DateOfBirth, err = parseDBTime(dateOfBirthValue)
+		if err != nil {
+			return participants, err
+		}
+		participant.JoinedAt, err = parseDBTime(joinedAtValue)
+		if err != nil {
+			return participants, err
+		}
+
 		participants = append(participants, participant)
+	}
+	if err := rows.Err(); err != nil {
+		return participants, err
 	}
 	return participants, nil
 }
@@ -94,13 +130,25 @@ func GetParticipantsToDraw(db *sql.DB, groupID string) ([]models.Participant, er
 	if err != nil {
 		return participants, err
 	}
+	defer rows.Close()
 	for rows.Next() {
 		var participant models.Participant
-		err := rows.Scan(&participant.GroupID, &participant.UserID, &participant.JoinedAt)
+		var joinedAtValue any
+
+		err := rows.Scan(&participant.GroupID, &participant.UserID, &joinedAtValue)
 		if err != nil {
 			return participants, err
 		}
+
+		participant.JoinedAt, err = parseDBTime(joinedAtValue)
+		if err != nil {
+			return participants, err
+		}
+
 		participants = append(participants, participant)
+	}
+	if err := rows.Err(); err != nil {
+		return participants, err
 	}
 	return participants, nil
 }
