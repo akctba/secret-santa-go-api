@@ -10,6 +10,7 @@ func Register(r *mux.Router) {
 	// User endpoints
 	r.HandleFunc("/user", controllers.CreateUser).Methods("POST")
 	r.HandleFunc("/user/signin", controllers.Signin).Methods("POST")
+	r.HandleFunc("/user/refresh", controllers.RefreshToken).Methods("POST")
 	r.HandleFunc("/user/{id}", controllers.BearerAuth(controllers.GetUser)).Methods("GET")
 
 	// Group endpoints

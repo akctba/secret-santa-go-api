@@ -21,6 +21,19 @@ type createUserRequest struct {
 	Password string `json:"password"`
 }
 
+type refreshTokenRequest struct {
+	RefreshToken string `json:"refresh_token"`
+}
+
+type signinResponse struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+}
+
+type refreshTokenResponse struct {
+	AccessToken string `json:"access_token"`
+}
+
 type userResponse struct {
 	UserID      int       `json:"user_id"`
 	UserName    string    `json:"user_name"`
@@ -41,7 +54,7 @@ func toUserResponse(user models.User) userResponse {
 	return resp
 }
 
-// Signin handles POST /user/signin. Validates credentials and returns a bearer token.
+// Signin handles POST /user/signin. Validates credentials and returns access and refresh tokens.
 func Signin(w http.ResponseWriter, r *http.Request) {
 	var request models.UserSignin
 	if err := decodeRequestJSON(r, &request); err != nil {
@@ -79,14 +92,53 @@ func Signin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := auth.CreateToken(user.UserID)
+	accessToken, err := auth.CreateAccessToken(user.UserID)
+	if err != nil {
+		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+		return
+	}
+
+	refreshToken, err := auth.CreateRefreshToken(user.UserID)
 	if err != nil {
 		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(token)
+	json.NewEncoder(w).Encode(signinResponse{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+	})
+}
+
+// RefreshToken handles POST /user/refresh. Validates a refresh token and returns a new access token.
+func RefreshToken(w http.ResponseWriter, r *http.Request) {
+	var request refreshTokenRequest
+	if err := decodeRequestJSON(r, &request); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	refreshToken := strings.TrimSpace(request.RefreshToken)
+	if refreshToken == "" {
+		http.Error(w, "refresh_token is required", http.StatusBadRequest)
+		return
+	}
+
+	userID, err := auth.ValidateRefreshToken(refreshToken)
+	if err != nil {
+		http.Error(w, "Invalid token", http.StatusUnauthorized)
+		return
+	}
+
+	accessToken, err := auth.CreateAccessToken(userID)
+	if err != nil {
+		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(refreshTokenResponse{AccessToken: accessToken})
 }
 
 // CreateUser handles POST /user. Hashes the password and persists the new user.
