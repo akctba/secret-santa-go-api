@@ -144,10 +144,15 @@ func GetUserParticipant(db *sql.DB, userId int, groupId int) (models.Participant
 	FROM Participants WHERE user_id = ? AND group_id = ?;`
 	row := db.QueryRow(sqlStmt, userId, groupId)
 	var joinedAtValue any
+	var friendUserID sql.NullInt64
 
-	err := row.Scan(&participant.GroupID, &participant.UserID, &joinedAtValue, &participant.FriendUserID)
+	err := row.Scan(&participant.GroupID, &participant.UserID, &joinedAtValue, &friendUserID)
 	if err != nil {
 		return participant, err
+	}
+
+	if friendUserID.Valid {
+		participant.FriendUserID = int(friendUserID.Int64)
 	}
 
 	participant.JoinedAt, err = parseDBTime(joinedAtValue)
