@@ -45,6 +45,12 @@ This API allows users to create groups for Secret Santa, add participants to the
     go run main.go
     ```
 
+### Environment Variables
+
+- `JWT_SECRET`: Optional secret used to sign bearer tokens.
+- `CORS_ALLOWED_ORIGINS`: Comma-separated list of allowed web origins for CORS (for example: `http://localhost:3000,https://app.example.com`).
+    If this is not set, cross-origin browser requests are disabled.
+
 3. The API will be available at `http://localhost:8080`.
 
 ### Running Tests
