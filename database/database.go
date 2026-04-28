@@ -38,10 +38,10 @@ func CreateTables() {
 
 	sqlStmt = `
 	CREATE TABLE IF NOT EXISTS Groups (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		group_name TEXT,
-		date_created TEXT,
-		date_draw TEXT,
+		group_id INTEGER PRIMARY KEY AUTOINCREMENT,
+		name TEXT,
+		date_created DATETIME,
+		date_draw DATETIME,
 		creator_user_id INTEGER
 	);
 	`
